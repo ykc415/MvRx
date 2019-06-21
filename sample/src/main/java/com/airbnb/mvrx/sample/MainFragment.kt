@@ -61,6 +61,12 @@ class MainFragment : BaseFragment() {
             )
             clickListener { _ -> navigateTo(R.id.action_main_to_flowIntroFragment) }
         }
+        basicRow {
+            id("stateful_view")
+            title("Custom Stateful Views")
+            subtitle(demonstrates("StatefulView, Custom Views"))
+            clickListener { _ -> navigateTo(R.id.action_main_to_statefulViewFragment) }
+        }
     }
 
     private fun demonstrates(vararg items: String) =

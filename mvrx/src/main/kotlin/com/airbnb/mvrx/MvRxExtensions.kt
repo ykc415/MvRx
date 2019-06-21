@@ -1,10 +1,13 @@
 package com.airbnb.mvrx
 
-import androidx.lifecycle.ViewModelProviders
+import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.RestrictTo
 import androidx.annotation.RestrictTo.Scope.LIBRARY
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.ViewModelProviders
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
@@ -52,6 +55,18 @@ inline fun <T, reified VM : BaseMvRxViewModel<S>, reified S : MvRxState> T.activ
     if (requireActivity() !is MvRxViewModelStoreOwner) throw IllegalArgumentException("Your Activity must be a MvRxViewModelStoreOwner!")
     MvRxViewModelProvider.get(viewModelClass.java, S::class.java, ActivityViewModelContext(requireActivity(), _activityArgsProvider(keyFactory)), keyFactory())
         .apply { subscribe(this@activityViewModel, subscriber = { postInvalidate() }) }
+}
+
+inline fun <T, reified VM : BaseMvRxViewModel<S>, reified S : MvRxState> T.fragmentViewModel(
+    viewModelClass: KClass<VM> = VM::class,
+    crossinline keyFactory: () -> String = { viewModelClass.java.name }
+): lifecycleAwareLazy<VM> where T : View, T : StatefulView {
+    val activity = context as AppCompatActivity
+    val fragment = fragment()
+    return lifecycleAwareLazy(fragment) {
+        MvRxViewModelProvider.get(viewModelClass.java, S::class.java, FragmentViewModelContext(activity, fragment._fragmentArgsProvider(), fragment), keyFactory())
+            .apply { subscribe(fragment.viewLifecycleOwner, subscriber = { onInvalidate() }) }
+    }
 }
 
 /**
@@ -128,3 +143,24 @@ fun <V : Any> args() = object : ReadOnlyProperty<Fragment, V> {
  * For example: [1,2,3].appendAt([4], 1) == [1,4]]
  */
 fun <T : Any> List<T>.appendAt(other: List<T>?, offset: Int) = subList(0, offset.coerceIn(0, size)) + (other ?: emptyList())
+
+fun View.fragment(): Fragment {
+    val activity = context as AppCompatActivity
+    val viewFragmentMap = mutableMapOf<View, Fragment>()
+    activity.supportFragmentManager.fragments.forEach { it.collectViewMap(viewFragmentMap) }
+
+    var view: View? = this
+    while (view != null) {
+        val fragment = viewFragmentMap[view]
+        if (fragment != null) {
+            return fragment
+        }
+        view = view.parent as? ViewGroup
+    }
+    throw java.lang.IllegalStateException("Unable to find a Fragment in any of the parents of $this.")
+}
+
+fun Fragment.collectViewMap(map: MutableMap<View, Fragment>) {
+    view?.let { view -> map[view] = this }
+    childFragmentManager.fragments.forEach { it.collectViewMap(map) }
+}
